@@ -21,9 +21,9 @@ SYSCALL_DEFINE0(start_elevator) {
 }
 
 SYSCALL_DEFINE3(issue_request, int, start_floor, int, destination_floor, int, type) {
-    printk(KERN_NOTICE "Inside SYSCALL_DEFINE0 block. %s", __FUNCTION__);
+    printk(KERN_NOTICE "Inside SYSCALL_DEFINE3 block. %s: Your int are %d, %d, %d\n", __FUNCTION__, start_floor, destination_floor, type);
     if(STUB_issue_request != NULL)
-        return STUB_issue_request();
+        return STUB_issue_request(start_floor, destination_floor, type);
     else
         return -ENOSYS;
 }
