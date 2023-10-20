@@ -1285,7 +1285,7 @@ int __sys_setsockopt(int fd, int level, int optname, char __user *optval,
 		int optlen);
 
 asmlinkage long sys_start_elevator(void);
-asmlinkage long sys_issue_request(void);
+asmlinkage long sys_issue_request(int, int, int);
 asmlinkage long sys_stop_elevator(void);
 
 #endif
