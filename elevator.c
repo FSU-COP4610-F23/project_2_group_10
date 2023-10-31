@@ -53,6 +53,7 @@ struct floor {
 struct student {
     char year;
     int destination;
+    struct list_head student;
 };
 
 
@@ -64,6 +65,16 @@ int start_elevator(void) {
 
 /* This function is called when when the issue_request system call is called */
 int issue_request(int start_floor, int destination_floor, int type) {
+    struct student * new_student = kmalloc(sizeof(struct student), GFP_KERNEL);
+    if(!new_student) {
+        printk(KERN_INFO "Error: could not allocate memory for new student\n");
+        return -ENOMEM;
+    }
+
+    new_student->year = intToYear(type);
+    new_student->destination = destination_floor;
+
+    list_add_tail(&new_student->student, &thisBuilding.floors[start_floor].studentsWaiting);  
     return 0;
 }
 
@@ -78,19 +89,19 @@ void process_elevator_state(struct elevator * e_thread) {
     switch(e_thread->state) {
         case LOADING:
             ssleep(1);                    // sleeps for 1 second, before processing next stuff!
-            if (e_thread->passengers->students->destination > e_thread->currentFloor)
+            if (&elevator_thread.passengers->destination > e_thread->currentFloor)
                 e_thread->state = UP;
             else e_thread->state = DOWN;
             break;
         case UP:
             ssleep(2);                                      // sleeps for 2 seconds, before processing next stuff!
-            if (e_thread->currentFloor != e_thread->passengers->students->destination)
+            if (e_thread->currentFloor != &elevator_thread.passengers->destination)
                 e_thread->currentFloor += 1;
             else e_thread->state = LOADING;                   // changed states!
             break;
         case DOWN:
             ssleep(2);
-            if (e_thread->currentFloor != e_thread->passengers->students->destination)
+            if (e_thread->currentFloor != &elevator_thread.passengers->destination)
                 e_thread->currentFloor -= 1;
             else e_thread->state = LOADING;
             break;
@@ -105,37 +116,25 @@ void process_elevator_state(struct elevator * e_thread) {
 int elevator_active(void * _elevator) {
     struct elevator * e_thread = (struct elevator *) _elevator;
     printk(KERN_INFO "elevator thread has started running \n");
-    while(!kernel_should_stop() || elevator_thread.passengers->numStudents > 0)
+    while(!kernel_should_stop() || e_thread->numPassengers > 0)
         process_elevator_state(e_thread);
-    elevator_thread.state = OFFLINE;
+    e_thread->state = OFFLINE;
     return 0;
 }
 
 int spawn_elevator(struct elevator * e_thread) {
     // initialize and/or allocate everything inside building struct and everything it points to
-    INIT_LIST_HEAD(&building.floors[0].studentsWaiting);
-    INIT_LIST_HEAD(&elevator.passengers);
     thisBuilding.numFloors = 6;
-    thisBuilding.floors->waiting->students = kmalloc(sizeof(student), __GFP_RECLAIM);
-    thisBuilding.floors->waiting = kmalloc(sizeof(students), __GFP_RECLAIM);
-    thisBuilding.floors->waiting = kmalloc(sizeof(floor), __GFP_RECLAIM);
-    thisBuilding.floors = kmalloc(sizeof(floor) * 6, __GFP_RECLAIM);
-    thisBuilding.waiting->students->year = NULL;
-    thisBuilding.waiting->students->next = NULL;
-    thisBuilding.waiting->students->destination = NULL;
-    thisBuilding.waiting->floorNum = NULL;
-    thisBuilding.waiting->numStudents = 0;
+    for (int i = 0; i < thisBuilding.numFloors; i++) {
+        thisBuilding.floors[i].numWaitingStud = 0;
+        INIT_LIST_HEAD(&thisBuilding.floors[i].studentsWaiting);
+    }
 
     // initialize and/or allocate everything inside elevator struct and everything it points to
     e_thread->currentFloor = 1;
     e_thread->state = OFFLINE;
-    e_thread->passengers->students = kmalloc(sizeof(student), __GFP_RECLAIM);
-    e_thread->passengers = kmalloc(sizeof(students), __GFP_RECLAIM);
-    e_thread->passengers->students->year = NULL;
-    e_thread->passengers->students->next = NULL;
-    e_thread->passengers->students->destination = NULL;
-    e_thread->passengers->floorNum = NULL;
-    e_thread->passengers->numStudents = 0;
+    e_thread->numPassengers = 0;
+    INIT_LIST_HEAD(&elevator_thread.passengers);
     e_thread->kthread = kthread_run(elevator_active, e_thread, "thread elevator\n"); // thread spawns here
 
     return 0;
