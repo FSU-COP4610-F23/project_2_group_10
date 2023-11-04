@@ -153,11 +153,25 @@ static ssize_t procfile_read(struct file *file, char __user *ubuf, size_t count,
     char buf[10000];
     int len = 0;
 
-    len = sprintf(buf, "Elevator state: \n");
-    len += sprintf(buf + len, "Current floor: \n");
-    len += sprintf(buf + len, "Current load: \n");
-    len += sprintf(buf + len, "Elevator status: \n");
-    // you can finish the rest.
+    //Recall that enums are just integers
+    len = sprintf(buf, "Elevator state: %d\n", elevator_thread.state);
+    len += sprintf(buf + len, "Current floor: %d\n", elevator_thread.currentFloor);
+    len += sprintf(buf + len, "Current load: %d\n", elevator_thread.numPassengers);
+    len += sprintf(buf + len, "Elevator status: ");
+    //Print all passengers here in a loop.
+    len += sprintf(buf + len, "\n\n\n");
+
+    //Print the "elevator" here.
+    for(int i = 6; i > 0; i--){
+        len += sprintf(buf + len, "[");
+        if(i == elevator_thread.currentFloor){
+            len += sprintf(buf + len, "*");
+        }
+        else{len += sprintf(buf + len, " ");}
+        len += sprintf(buf + len, "] Floor %d: ", i);
+        //Print out the linked list of students here if it's not empty
+        len += sprintf(buf + len, "\n");
+    }
 
     return simple_read_from_buffer(ubuf, count, ppos, log_buffer, buf_offset);
 }
