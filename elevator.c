@@ -16,6 +16,7 @@ MODULE_DESCRIPTION("syscalls written to procfile with proc entry");
 #define PERMS 0644
 #define PARENT NULL
 #define LOG_BUF_LEN 1024
+#define MAX_LOAD 750
 
 static char log_buffer[LOG_BUF_LEN];
 static int buf_offset = 0;
@@ -25,10 +26,6 @@ extern int (*STUB_start_elevator)(void);
 extern int (*STUB_issue_request)(int,int,int);
 extern int (*STUB_stop_elevator)(void);
 
-static struct proc_dir_entry *proc_entry;
-static struct elevator elevator_thread;
-static struct building thisBuilding;
-
 
 enum status {OFFLINE, IDLE, LOADING, UP, DOWN};      // you should note that enums are just integers.
 
@@ -36,6 +33,8 @@ struct elevator {
     int currentFloor;
     enum status state;
     int numPassengers;
+    int numServed;
+    int load;
     struct list_head passengers;
     struct task_struct *kthread;    // this is the struct to make a kthread.
 };
@@ -52,15 +51,49 @@ struct floor {
 
 struct student {
     char year;
+    int weight;
     int destination;
     struct list_head student;
 };
+
+
+static struct proc_dir_entry *proc_entry;
+static struct elevator elevator_thread;
+static struct building thisBuilding;
 
 
 /* This function is called when when the start_elevator system call is called */
 int start_elevator(void) {
     started = true;
     return 0;
+}
+
+char intToYear(int year) {
+    switch(year) {
+        case 1:
+            return 'F';
+        case 2:
+            return 'O';
+        case 3:
+            return 'J';
+        case 4:
+            return 'S';
+    }
+}
+
+int yearToWeight(int year) {
+    switch(year) {
+        case 1:
+            return 100;
+        case 2:
+            return 150;
+        case 3:
+            return 200;
+        case 4: 
+            return 250;
+        default:
+            return 0; 
+    }
 }
 
 /* This function is called when when the issue_request system call is called */
@@ -72,6 +105,7 @@ int issue_request(int start_floor, int destination_floor, int type) {
     }
 
     new_student->year = intToYear(type);
+    new_student->weight = yearToWeight(type);
     new_student->destination = destination_floor;
 
     list_add_tail(&new_student->student, &thisBuilding.floors[start_floor].studentsWaiting);  
@@ -89,6 +123,21 @@ void process_elevator_state(struct elevator * e_thread) {
     switch(e_thread->state) {
         case LOADING:
             ssleep(1);                    // sleeps for 1 second, before processing next stuff!
+            list_for_each_entry(student, &e_thread->passengers, list) {
+                if (student->destination == e_thread->currentFloor) {
+                    e_thread->numServed += 1;
+                    e_thread->load -= student->weight;
+                    struct list_head *next = e_thread->passengers->list.next;
+                    list_del_init(&e_thread->passengers->list);
+                    e_thread->passengers = next;
+                }
+            }
+            list_for_each_entry(student, &thisBuilding.floors[e_thread->currentFloor].studentsWaiting, list) {
+                if (e_thread->load + student->weight <= MAX_LOAD) {
+                    list_add_tail(&student->student, e_thread->passengers);
+                    e_thread->load += student->weight;
+                }
+            }
             if (&elevator_thread.passengers->destination > e_thread->currentFloor)
                 e_thread->state = UP;
             else e_thread->state = DOWN;
@@ -134,6 +183,8 @@ int spawn_elevator(struct elevator * e_thread) {
     e_thread->currentFloor = 1;
     e_thread->state = OFFLINE;
     e_thread->numPassengers = 0;
+    e_thread->numServed = 0;
+    e_thread->load = 0;
     INIT_LIST_HEAD(&elevator_thread.passengers);
     e_thread->kthread = kthread_run(elevator_active, e_thread, "thread elevator\n"); // thread spawns here
 
@@ -153,10 +204,25 @@ static ssize_t procfile_read(struct file *file, char __user *ubuf, size_t count,
     char buf[10000];
     int len = 0;
 
-    len = sprintf(buf, "Elevator state: \n");
-    len += sprintf(buf + len, "Current floor: \n");
-    len += sprintf(buf + len, "Current load: \n");
-    len += sprintf(buf + len, "Elevator status: \n");
+    //Recall that enums are just integers
+    len = sprintf(buf, "Elevator state: %d\n", elevator_thread.status);
+    len += sprintf(buf + len, "Current floor: %d\n", elevator_thread.currentFloor);
+    len += sprintf(buf + len, "Current load: %d\n", elevator_thread.numPassengers);
+    len += sprintf(buf + len, "Elevator status: ");
+    //Print all passengers here in a loop.
+    len += sprintf(buf + len, "\n\n\n");
+
+    //Print the "elevator" here.
+    for(int i = 6; i > 0; i--){
+        len += sprintf(buf + len, "[");
+        if(i == elevator_thread.currentFloor){
+            len += sprintf(buf + len, "*");
+        }
+        else{len += sprintf(buf + len, " ");}
+        len += sprintf(buf + len, "] Floor %d: ", i);
+        //Print out the linked list of students here if it's not empty
+        len += sprintf(buf + len, "\n");
+    }
     // you can finish the rest.
 
     return simple_read_from_buffer(ubuf, count, ppos, log_buffer, buf_offset);
@@ -198,11 +264,17 @@ static int __init elevator_init(void) {
 
 /* This is where we exit our kernel module, when we unload it! */
 static void __exit elevator_exit(void) {
+    struct student * student, * next;
 
     // This is where we unlink our system calls from our stubs
     STUB_start_elevator = NULL;
     STUB_issue_request = NULL;
     STUB_stop_elevator = NULL;
+
+    list_for_each_entry_safe(student, next, &thisBuilding.floors[0].studentsWaiting, list) {
+        list_del(&student->list);
+        kfree(student);
+    }
 
     remove_proc_entry(ENTRY_NAME, PARENT); // this is where we remove the proc file!
 }
