@@ -224,6 +224,7 @@ int spawn_elevator(struct elevator * e_thread) {
 static ssize_t procfile_read(struct file *file, char __user *ubuf, size_t count, loff_t *ppos)
 {
     struct timespec64 ts_now;
+    struct student* student;
 
     //if( (elapsed.tv_sec == 2) && (elapsed.tv_nsec == 0) ), move to next floor
 
@@ -233,13 +234,37 @@ static ssize_t procfile_read(struct file *file, char __user *ubuf, size_t count,
     char buf[10000];
     int len = 0;
 
-    len = sprintf(buf, "Elevator state: \n");
-    len += sprintf(buf + len, "Current floor: \n");
-    len += sprintf(buf + len, "Current load: \n");
-    len += sprintf(buf + len, "Elevator status: \n");
+    mutex_lock(&elevator_mutex);
+    //Recall that enums are just integers
+    len = snprintf(buf, sizeof(buf), "Elevator state: %d\n", elevator_thread.state);
+    len += snprintf(buf + len, sizeof(buf), "Current floor: %d\n", elevator_thread.currentFloor);
+    len += snprintf(buf + len, sizeof(buf), "Current load: %d\n", elevator_thread.load);
+    len += snprintf(buf + len, sizeof(buf), "Elevator status: ");
+    //Print all passengers here in a loop.
+    list_for_each_entry(student, &elevator_thread.passengers, student) {
+        len += snprintf(buf + len, sizeof(buf), "%c%d ", student->year, student->destination);
+    }
+    len += snprintf(buf + len, sizeof(buf), "\n\n\n");
+
+    //Print the "elevator" here.
+    for(int i = 6; i > 0; i--){
+        len += snprintf(buf + len, sizeof(buf), "[");
+        if(i == elevator_thread.currentFloor){
+            len += snprintf(buf + len, sizeof(buf), "*");
+        }
+        else{len += snprintf(buf + len, sizeof(buf), " ");}
+        len += snprintf(buf + len, sizeof(buf), "] Floor %d: ", i);
+        //Print out the linked list of students here if it's not empty
+        len += snprintf(buf + len, sizeof(buf), "\n");
+    }
+
+    len = snprintf(buf, sizeof(buf), "Number of passengers: %d\n", elevator_thread.numPassengers);
+    //len += sprintf(buf + len, "Number of passengers waiting: %d\n", elevator_thread.);
+    len += snprintf(buf + len, sizeof(buf), "Number of passengers serviced: %d\n", elevator_thread.numServed);
+    mutex_unlock(&elevator_mutex);
     // you can finish the rest.
 
-    return simple_read_from_buffer(ubuf, count, ppos, log_buffer, buf_offset);
+    return simple_read_from_buffer(ubuf, count, ppos, buf, len);
 }
 
 /* This is where we define our procfile operations */
