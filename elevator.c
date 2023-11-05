@@ -5,6 +5,8 @@
 #include <linux/kthread.h>
 #include <linux/delay.h>
 #include <linux/timekeeping.h>
+#include <linux/mutex.h>
+#include <linux/syscalls.h>
 
 #include <linux/list.h>
 
@@ -29,6 +31,13 @@ extern int (*STUB_stop_elevator)(void);
 
 enum status {OFFLINE, IDLE, LOADING, UP, DOWN};      // you should note that enums are just integers.
 
+struct student {
+    char year;
+    int weight;
+    int destination;
+    struct list_head student;
+};
+
 struct elevator {
     int currentFloor;
     enum status state;
@@ -39,27 +48,21 @@ struct elevator {
     struct task_struct *kthread;    // this is the struct to make a kthread.
 };
 
-struct building {
-    int numFloors;
-    struct floor floors[6];
-};
-
 struct floor {
     int numWaitingStud;
     struct list_head studentsWaiting;
 };
 
-struct student {
-    char year;
-    int weight;
-    int destination;
-    struct list_head student;
+struct building {
+    int numFloors;
+    struct floor floors[6];
 };
-
 
 static struct proc_dir_entry *proc_entry;
 static struct elevator elevator_thread;
 static struct building thisBuilding;
+static DEFINE_MUTEX(elevator_mutex);
+static DEFINE_MUTEX(building_mutex);
 
 
 /* This function is called when when the start_elevator system call is called */
@@ -78,6 +81,8 @@ char intToYear(int year) {
             return 'J';
         case 4:
             return 'S';
+        default:
+            return 'X';
     }
 }
 
@@ -108,7 +113,9 @@ int issue_request(int start_floor, int destination_floor, int type) {
     new_student->weight = yearToWeight(type);
     new_student->destination = destination_floor;
 
+    mutex_lock(&building_mutex);
     list_add_tail(&new_student->student, &thisBuilding.floors[start_floor].studentsWaiting);  
+    mutex_unlock(&building_mutex);
     return 0;
 }
 
@@ -120,43 +127,63 @@ int stop_elevator(void) {
 
 /* Function to process elevator state */
 void process_elevator_state(struct elevator * e_thread) {
+    struct student* student;
+    struct student *next_student;
     switch(e_thread->state) {
         case LOADING:
             ssleep(1);                    // sleeps for 1 second, before processing next stuff!
-            list_for_each_entry(student, &e_thread->passengers, list) {
+            mutex_lock(&elevator_mutex);
+            list_for_each_entry(student, &e_thread->passengers, student) {
                 if (student->destination == e_thread->currentFloor) {
                     e_thread->numServed += 1;
                     e_thread->load -= student->weight;
-                    struct list_head *next = e_thread->passengers->list.next;
-                    list_del_init(&e_thread->passengers->list);
-                    e_thread->passengers = next;
+                    struct list_head *next = e_thread->passengers.next;
+                    list_del_init(&e_thread->passengers);
+                    e_thread->passengers = *(next);
                 }
             }
-            list_for_each_entry(student, &thisBuilding.floors[e_thread->currentFloor].studentsWaiting, list) {
+            mutex_unlock(&elevator_mutex);
+            mutex_lock(&elevator_mutex);
+            mutex_lock(&building_mutex);
+            list_for_each_entry(student, &thisBuilding.floors[e_thread->currentFloor].studentsWaiting, student) {
                 if (e_thread->load + student->weight <= MAX_LOAD) {
-                    list_add_tail(&student->student, e_thread->passengers);
+                    list_add_tail(&student->student, &e_thread->passengers);
                     e_thread->load += student->weight;
                 }
             }
-            if (&elevator_thread.passengers->destination > e_thread->currentFloor)
+            mutex_unlock(&elevator_mutex);
+            mutex_unlock(&building_mutex);
+            mutex_lock(&elevator_mutex);
+            //error check this if needed
+            next_student = list_entry(e_thread->passengers.next, struct student, student);
+            if (next_student->destination > e_thread->currentFloor)
                 e_thread->state = UP;
             else e_thread->state = DOWN;
+            mutex_unlock(&elevator_mutex);
             break;
         case UP:
             ssleep(2);                                      // sleeps for 2 seconds, before processing next stuff!
-            if (e_thread->currentFloor != &elevator_thread.passengers->destination)
+            mutex_lock(&elevator_mutex);
+            next_student = list_entry(e_thread->passengers.next, struct student, student);
+            if (e_thread->currentFloor != next_student->destination)
                 e_thread->currentFloor += 1;
             else e_thread->state = LOADING;                   // changed states!
+            mutex_unlock(&elevator_mutex);
             break;
         case DOWN:
             ssleep(2);
-            if (e_thread->currentFloor != &elevator_thread.passengers->destination)
+            mutex_lock(&elevator_mutex);
+            next_student = list_entry(e_thread->passengers.next, struct student, student);
+            if (e_thread->currentFloor != next_student->destination)
                 e_thread->currentFloor -= 1;
             else e_thread->state = LOADING;
+            mutex_unlock(&elevator_mutex);
             break;
         case OFFLINE:
+            mutex_lock(&elevator_mutex);
             if (started)
                 e_thread->state = IDLE;
+            mutex_unlock(&elevator_mutex);
         default:
             break;
     }
@@ -165,9 +192,11 @@ void process_elevator_state(struct elevator * e_thread) {
 int elevator_active(void * _elevator) {
     struct elevator * e_thread = (struct elevator *) _elevator;
     printk(KERN_INFO "elevator thread has started running \n");
-    while(!kernel_should_stop() || e_thread->numPassengers > 0)
+    mutex_lock(&elevator_mutex);
+    while(!kthread_should_stop() || e_thread->numPassengers > 0)
         process_elevator_state(e_thread);
     e_thread->state = OFFLINE;
+    mutex_unlock(&elevator_mutex);
     return 0;
 }
 
@@ -204,25 +233,10 @@ static ssize_t procfile_read(struct file *file, char __user *ubuf, size_t count,
     char buf[10000];
     int len = 0;
 
-    //Recall that enums are just integers
-    len = sprintf(buf, "Elevator state: %d\n", elevator_thread.status);
-    len += sprintf(buf + len, "Current floor: %d\n", elevator_thread.currentFloor);
-    len += sprintf(buf + len, "Current load: %d\n", elevator_thread.numPassengers);
-    len += sprintf(buf + len, "Elevator status: ");
-    //Print all passengers here in a loop.
-    len += sprintf(buf + len, "\n\n\n");
-
-    //Print the "elevator" here.
-    for(int i = 6; i > 0; i--){
-        len += sprintf(buf + len, "[");
-        if(i == elevator_thread.currentFloor){
-            len += sprintf(buf + len, "*");
-        }
-        else{len += sprintf(buf + len, " ");}
-        len += sprintf(buf + len, "] Floor %d: ", i);
-        //Print out the linked list of students here if it's not empty
-        len += sprintf(buf + len, "\n");
-    }
+    len = sprintf(buf, "Elevator state: \n");
+    len += sprintf(buf + len, "Current floor: \n");
+    len += sprintf(buf + len, "Current load: \n");
+    len += sprintf(buf + len, "Elevator status: \n");
     // you can finish the rest.
 
     return simple_read_from_buffer(ubuf, count, ppos, log_buffer, buf_offset);
@@ -271,8 +285,8 @@ static void __exit elevator_exit(void) {
     STUB_issue_request = NULL;
     STUB_stop_elevator = NULL;
 
-    list_for_each_entry_safe(student, next, &thisBuilding.floors[0].studentsWaiting, list) {
-        list_del(&student->list);
+    list_for_each_entry_safe(student, next, &thisBuilding.floors[0].studentsWaiting, student) {
+        list_del(&student->student);
         kfree(student);
     }
 
