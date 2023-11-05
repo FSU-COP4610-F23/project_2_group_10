@@ -1,4 +1,4 @@
-obj-m += my_timer.o
+obj-m += src/my_timer.o
 
 KDIR := /lib/modules/$(shell uname -r)/build
 

@@ -1,4 +1,4 @@
-obj-m += elevator_example.o
+obj-m += src/elevator.o
 
 KDIR := /lib/modules/$(shell uname -r)/build
 
