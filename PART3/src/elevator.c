@@ -22,6 +22,8 @@ MODULE_DESCRIPTION("syscalls written to procfile with proc entry");
 
 static char log_buffer[LOG_BUF_LEN];
 static int buf_offset = 0;
+static char buf[10000];
+static int len = 0;
 static bool started = false;
 
 extern int (*STUB_start_elevator)(void);
@@ -223,40 +225,47 @@ int spawn_elevator(struct elevator * e_thread) {
 /* This function triggers every read! */
 static ssize_t procfile_read(struct file *file, char __user *ubuf, size_t count, loff_t *ppos)
 {
-    struct timespec64 ts_now;
+    struct student* student;
 
     //if( (elapsed.tv_sec == 2) && (elapsed.tv_nsec == 0) ), move to next floor
 
     //else if( ((elapsed.tv_sec == 2) && (elapsed.tv_nsec == 0)) && ((!floorline) || (!psngrsOnElev)) ),
     //load or unload the passengers
 
-    char buf[10000];
-    int len = 0;
-
-    mutex_lock(&elevator_mutex);
+    //mutex_lock(&elevator_mutex);
     //Recall that enums are just integers
-    len = sprintf(buf, "Elevator state: %d\n", elevator_thread.state);
-    len += sprintf(buf + len, "Current floor: %d\n", elevator_thread.currentFloor);
-    len += sprintf(buf + len, "Current load: %d\n", elevator_thread.numPassengers);
-    len += sprintf(buf + len, "Elevator status: ");
+    len = snprintf(buf, sizeof(buf), "Elevator state: %d\n", elevator_thread.state);
+    len += snprintf(buf + len, sizeof(buf), "Current floor: %d\n", elevator_thread.currentFloor);
+    len += snprintf(buf + len, sizeof(buf), "Current load: %d\n", elevator_thread.load);
+    len += snprintf(buf + len, sizeof(buf), "Elevator status: ");
     //Print all passengers here in a loop.
-    len += sprintf(buf + len, "\n\n\n");
+    list_for_each_entry(student, &elevator_thread.passengers, student) {
+        len += snprintf(buf + len, sizeof(buf), "%c%d ", student->year, student->destination);
+    }
+    len += snprintf(buf + len, sizeof(buf), "\n\n\n");
 
     //Print the "elevator" here.
     for(int i = 6; i > 0; i--){
-        len += sprintf(buf + len, "[");
+        len += snprintf(buf + len, sizeof(buf), "[");
         if(i == elevator_thread.currentFloor){
-            len += sprintf(buf + len, "*");
+            len += snprintf(buf + len, sizeof(buf), "*");
         }
-        else{len += sprintf(buf + len, " ");}
-        len += sprintf(buf + len, "] Floor %d: ", i);
+        else{len += snprintf(buf + len, sizeof(buf), " ");}
+        len += snprintf(buf + len, sizeof(buf), "] Floor %d: ", i);
         //Print out the linked list of students here if it's not empty
-        len += sprintf(buf + len, "\n");
+        list_for_each_entry(student, &thisBuilding.floors[i-1].studentsWaiting, student) {
+            len += snprintf(buf + len, sizeof(buf), "%c%d ", student->year, student->destination);
+        }
+        len += snprintf(buf + len, sizeof(buf), "\n");
     }
-    mutex_unlock(&elevator_mutex);
+
+    len += snprintf(buf + len, sizeof(buf), "Number of passengers: %d\n", elevator_thread.numPassengers);
+    //len += sprintf(buf + len, "Number of passengers waiting: %d\n", elevator_thread.);
+    len += snprintf(buf + len, sizeof(buf), "Number of passengers serviced: %d\n", elevator_thread.numServed);
+    //mutex_unlock(&elevator_mutex);
     // you can finish the rest.
 
-    return simple_read_from_buffer(ubuf, count, ppos, log_buffer, buf_offset);
+    return simple_read_from_buffer(ubuf, count, ppos, buf, len);
 }
 
 /* This is where we define our procfile operations */
