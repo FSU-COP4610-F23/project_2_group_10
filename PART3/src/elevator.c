@@ -18,10 +18,8 @@ MODULE_DESCRIPTION("syscalls written to procfile with proc entry");
 #define PERMS 0644
 #define PARENT NULL
 #define LOG_BUF_LEN 8192
-#define LOG_BUF_LEN 8192
 #define MAX_LOAD 750
 
-static char buf[LOG_BUF_LEN];
 static char buf[LOG_BUF_LEN];
 static int len = 0;
 static bool started;
@@ -43,7 +41,6 @@ struct student {
 struct elevator {
     int currentFloor;
     int destination;
-    int destination;
     enum status state;
     int numPassengers;
     int numServed;
@@ -59,7 +56,6 @@ struct floor {
 
 struct building {
     int numFloors;
-    int totalWaitingStuds;
     int totalWaitingStuds;
     struct floor floors[6];
 };
@@ -83,15 +79,11 @@ int start_elevator(void) {
 char intToYear(int year) {
     switch(year) {
         case 0:
-        case 0:
             return 'F';
-        case 1:
         case 1:
             return 'O';
         case 2:
-        case 2:
             return 'J';
-        case 3:
         case 3:
             return 'S';
         default:
@@ -102,36 +94,15 @@ char intToYear(int year) {
 int yearToWeight(int year) {
     switch(year) {
         case 0:
-        case 0:
             return 100;
-        case 1:
         case 1:
             return 150;
         case 2:
-        case 2:
             return 200;
-        case 3: 
         case 3: 
             return 250;
         default:
             return 0; 
-    }
-}
-
-char* enumToState(int stateNum) {
-    switch(stateNum) {
-        case 0:
-            return "OFFLINE";
-        case 1:
-            return "IDLE";
-        case 2:
-            return "LOADING";
-        case 3: 
-            return "UP";
-        case 4:
-            return "DOWN";
-        default:
-            return "STOP"; 
     }
 }
 
@@ -165,9 +136,6 @@ int issue_request(int start_floor, int destination_floor, int type) {
     new_student->destination = destination_floor;
 
     mutex_lock(&building_mutex);
-    list_add_tail(&new_student->student, &thisBuilding.floors[start_floor].studentsWaiting);
-    thisBuilding.totalWaitingStuds += 1;
-    thisBuilding.floors[start_floor].numWaitingStud += 1;
     list_add_tail(&new_student->student, &thisBuilding.floors[start_floor].studentsWaiting);
     thisBuilding.totalWaitingStuds += 1;
     thisBuilding.floors[start_floor].numWaitingStud += 1;
@@ -211,28 +179,13 @@ void process_elevator_state(struct elevator * e_thread) {
                     thisBuilding.floors[e_thread->currentFloor].studentsWaiting = *(next);
                     thisBuilding.totalWaitingStuds -= 1;
                     thisBuilding.floors[e_thread->currentFloor].numWaitingStud -= 1;
-                    struct list_head *next = thisBuilding.floors[e_thread->currentFloor].studentsWaiting.next;
-                    list_del_init(&thisBuilding.floors[e_thread->currentFloor].studentsWaiting);
-                    thisBuilding.floors[e_thread->currentFloor].studentsWaiting = *(next);
-                    thisBuilding.totalWaitingStuds -= 1;
-                    thisBuilding.floors[e_thread->currentFloor].numWaitingStud -= 1;
                 }
             }
             mutex_unlock(&elevator_mutex);
             mutex_unlock(&building_mutex);
 
-
             mutex_lock(&elevator_mutex);
             //error check this if needed
-            if (e_thread->numPassengers != 0) {
-                next_student = list_entry(e_thread->passengers.next, struct student, student);
-                e_thread->destination = next_student->destination;
-                if (e_thread->destination > e_thread->currentFloor)
-                    e_thread->state = UP;
-                else e_thread->state = DOWN;
-            }
-            else
-                e_thread->state = IDLE;
             if (e_thread->numPassengers != 0) {
                 next_student = list_entry(e_thread->passengers.next, struct student, student);
                 e_thread->destination = next_student->destination;
@@ -248,7 +201,6 @@ void process_elevator_state(struct elevator * e_thread) {
             ssleep(2);                                      // sleeps for 2 seconds, before processing next stuff!
             mutex_lock(&elevator_mutex);
             if (e_thread->currentFloor != e_thread->destination)
-            if (e_thread->currentFloor != e_thread->destination)
                 e_thread->currentFloor += 1;
             else e_thread->state = LOADING;                   // changed states!
             mutex_unlock(&elevator_mutex);
@@ -256,7 +208,6 @@ void process_elevator_state(struct elevator * e_thread) {
         case DOWN:
             ssleep(2);
             mutex_lock(&elevator_mutex);
-            if (e_thread->currentFloor != e_thread->destination)
             if (e_thread->currentFloor != e_thread->destination)
                 e_thread->currentFloor -= 1;
             else e_thread->state = LOADING;
@@ -296,8 +247,6 @@ void process_elevator_state(struct elevator * e_thread) {
             mutex_unlock(&elevator_mutex);
             mutex_unlock(&building_mutex);
             break;
-            mutex_unlock(&building_mutex);
-            break;
         default:
             break;
     }
@@ -308,14 +257,7 @@ int elevator_active(void * _elevator) {
     printk(KERN_INFO "elevator thread has started running \n");
     int full = 0;
     while(!kthread_should_stop() || full > 0) {
-    int full = 0;
-    while(!kthread_should_stop() || full > 0) {
         process_elevator_state(e_thread);
-        mutex_lock(&elevator_mutex);
-        full = e_thread->numPassengers;
-        mutex_unlock(&elevator_mutex);
-    }
-    mutex_lock(&elevator_mutex);
         mutex_lock(&elevator_mutex);
         full = e_thread->numPassengers;
         mutex_unlock(&elevator_mutex);
@@ -323,7 +265,6 @@ int elevator_active(void * _elevator) {
     mutex_lock(&elevator_mutex);
     e_thread->state = OFFLINE;
     mutex_unlock(&elevator_mutex);
-    
     
     return 0;
 }
@@ -334,22 +275,17 @@ int spawn_elevator(struct elevator * e_thread) {
     mutex_unlock(&start_mutex);
     // initialize and/or allocate everything inside building struct and everything it points to
     mutex_lock(&building_mutex);
-    mutex_lock(&building_mutex);
     thisBuilding.numFloors = 6;
-    thisBuilding.totalWaitingStuds = 0;
     thisBuilding.totalWaitingStuds = 0;
     for (int i = 0; i < thisBuilding.numFloors; i++) {
         thisBuilding.floors[i].numWaitingStud = 0;
         INIT_LIST_HEAD(&thisBuilding.floors[i].studentsWaiting);
     }
     mutex_unlock(&building_mutex);
-    mutex_unlock(&building_mutex);
 
     // initialize and/or allocate everything inside elevator struct and everything it points to
     mutex_lock(&elevator_mutex);
-    mutex_lock(&elevator_mutex);
     e_thread->currentFloor = 1;
-    e_thread->destination = 0;
     e_thread->destination = 0;
     e_thread->state = OFFLINE;
     e_thread->numPassengers = 0;
@@ -357,7 +293,6 @@ int spawn_elevator(struct elevator * e_thread) {
     e_thread->load = 0;
     INIT_LIST_HEAD(&elevator_thread.passengers);
     e_thread->kthread = kthread_run(elevator_active, e_thread, "thread elevator\n"); // thread spawns here
-    mutex_unlock(&elevator_mutex);
     mutex_unlock(&elevator_mutex);
 
     return 0;
@@ -371,9 +306,6 @@ static ssize_t procfile_read(struct file *file, char __user *ubuf, size_t count,
     mutex_lock(&elevator_mutex);
     //Recall that enums are just integer
     len = snprintf(buf, sizeof(buf), "Elevator state: %s\n", enumToState(elevator_thread.state));
-    mutex_lock(&elevator_mutex);
-    //Recall that enums are just integer
-    len = snprintf(buf, sizeof(buf), "Elevator state: %s\n", enumToState(elevator_thread.state));
     len += snprintf(buf + len, sizeof(buf), "Current floor: %d\n", elevator_thread.currentFloor);
     len += snprintf(buf + len, sizeof(buf), "Current load: %d\n", elevator_thread.load);
     mutex_unlock(&elevator_mutex);
@@ -382,7 +314,6 @@ static ssize_t procfile_read(struct file *file, char __user *ubuf, size_t count,
     len += snprintf(buf + len, sizeof(buf), "Elevator status:");
     //Print all passengers here in a loop.
     list_for_each_entry(student, &elevator_thread.passengers, student) {
-        len += snprintf(buf + len, sizeof(buf), " %c%d", student->year, student->destination);
         len += snprintf(buf + len, sizeof(buf), " %c%d", student->year, student->destination);
     }
     len += snprintf(buf + len, sizeof(buf), "\n\n");
@@ -397,11 +328,11 @@ static ssize_t procfile_read(struct file *file, char __user *ubuf, size_t count,
             len += snprintf(buf + len, sizeof(buf), "*");
         }
         else{len += snprintf(buf + len, sizeof(buf), " ");}
+        len += snprintf(buf + len, sizeof(buf), "] Floor %d: ", i);
         mutex_unlock(&elevator_mutex);
+        //Print out the linked list of students here if it's not empty
 
         mutex_lock(&building_mutex);
-        len += snprintf(buf + len, sizeof(buf), "] Floor %d: %d ", i, thisBuilding.floors[i-1].numWaitingStud);
-        //Print out the linked list of students here if it's not empty
         list_for_each_entry(student, &thisBuilding.floors[i-1].studentsWaiting, student) {
             len += snprintf(buf + len, sizeof(buf), "%c%d ", student->year, student->destination);
         }
@@ -409,7 +340,6 @@ static ssize_t procfile_read(struct file *file, char __user *ubuf, size_t count,
 
         len += snprintf(buf + len, sizeof(buf), "\n");
     }
-    len += snprintf(buf + len, sizeof(buf), "\n");
     len += snprintf(buf + len, sizeof(buf), "\n");
 
     mutex_lock(&elevator_mutex);
@@ -422,7 +352,6 @@ static ssize_t procfile_read(struct file *file, char __user *ubuf, size_t count,
     
     mutex_lock(&elevator_mutex);
     len += snprintf(buf + len, sizeof(buf), "Number of passengers serviced: %d\n", elevator_thread.numServed);
-    mutex_unlock(&elevator_mutex);
     mutex_unlock(&elevator_mutex);
     // you can finish the rest.
 
