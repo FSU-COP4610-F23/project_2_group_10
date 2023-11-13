@@ -20,16 +20,16 @@ Part 3b: Kernel Compilation
 - Roderick Shaw, Fernando Parra, Sofia Sanchez
 
 Part 3c: Threads
-- Roderick Shaw, Fernando Parra, Sofia Sanchez
+- Sofia Sanchez
 
 Part 3d: Linked List
 - Roderick Shaw, Fernando Parra, Sofia Sanchez
 
 Part 3e: Mutexes
-- Roderick Shaw, Fernando Parra, Sofia Sanchez
+- Roderick Shaw, Sofia Sanchez
 
 Part 3f: Scheduling Algorithm
-- Roderick Shaw, Fernando Parra, Sofia Sanchez
+- Sofia Sanchez
 
 List of Files:
 ```
@@ -51,4 +51,26 @@ List of Files:
 ├── Makefile
 ├── README.md
 ```
+
+## How to Compile & Execute
+
+### Requirements
+- **Compiler**: gcc -std=c99 nameOfFile -o whatYouWantTheExecutableToBeNamed
+- **Dependencies**: None needed to be downloaded
+
+### Compilation
+```bash
+make all
+```
+This will build both executables with the makefile and shoves the appropriate
+contents into the other folders in this directory. You must create the bin,
+obj, and obj2 folders in the same directory.
+### Execution
+```bash
+make run
+./bin/shell
+```
+This will run the shell program and start off with a slightly different prompt than
+before. However, this will not create the mytimeout executable. Use make all and then
+bin/shell to get back into the shell executable.
   
