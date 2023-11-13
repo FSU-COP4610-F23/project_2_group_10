@@ -30,3 +30,23 @@ Part 3e: Mutexes
 
 Part 3f: Scheduling Algorithm
 - Roderick Shaw, Fernando Parra, Sofia Sanchez
+
+List of Files:
+--part 1/
+  |------empty.c (empty.rs)
+  |------empty.trace
+  |------part1.c (part1.rs)
+  |------part1.trace
+  [------Makefile
+--part 2/
+  |------src/
+         [----my_timer.c
+  [------Makefile
+--part 3/
+  |------src/
+         [----elevator.c
+  |------Makefile
+  [------syscalls.c
+--Makefile
+--README.md
+  
