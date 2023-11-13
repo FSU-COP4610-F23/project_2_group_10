@@ -147,7 +147,7 @@ int issue_request(int start_floor, int destination_floor, int type) {
 
 /* This function is called when when the stop_elevator system call is called */
 int stop_elevator(void) {
-    kthread_stop(elevator_thread.kthread);
+    started = false;
     return 0;
 }
 
@@ -242,6 +242,7 @@ void process_elevator_state(struct elevator * e_thread) {
             mutex_unlock(&elevator_mutex);
             break;
         case OFFLINE:
+            ssleep(.3);
             mutex_lock(&start_mutex);
             mutex_lock(&elevator_mutex);
             if (started){
