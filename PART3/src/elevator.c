@@ -147,7 +147,9 @@ int issue_request(int start_floor, int destination_floor, int type) {
 
 /* This function is called when when the stop_elevator system call is called */
 int stop_elevator(void) {
+    mutex_lock(&start_mutex);
     started = false;
+    mutex_unlock(&start_mutex);
     return 0;
 }
 
@@ -181,6 +183,7 @@ void process_elevator_state(struct elevator * e_thread) {
 			
 			int adjusted_current_floor = e_thread->currentFloor - 1;
 			
+            if (started) {
             mutex_lock(&building_mutex);
             list_for_each_entry_safe(student, next, &thisBuilding.floors[adjusted_current_floor].studentsWaiting, student) {
                 if (e_thread->load + student->weight <= MAX_LOAD) {
@@ -192,9 +195,9 @@ void process_elevator_state(struct elevator * e_thread) {
 					
 					}
 			}
-            
-           
             mutex_unlock(&building_mutex);
+            }
+
             //error check this if needed
             if (e_thread->numPassengers != 0) {
                 next_student = list_entry(e_thread->passengers.next, struct student, student);
@@ -215,7 +218,7 @@ void process_elevator_state(struct elevator * e_thread) {
 			
             if (e_thread->currentFloor != e_thread->destination)
 			{
-				if(thisBuilding.floors[e_thread->currentFloor + 1].numWaitingStud > 0 && e_thread->load < 750)
+				if(thisBuilding.floors[e_thread->currentFloor + 1].numWaitingStud > 0 && e_thread->load < 750 && started == true)
 				{
 					e_thread->state = LOADING;
 				}
@@ -232,7 +235,7 @@ void process_elevator_state(struct elevator * e_thread) {
             mutex_lock(&elevator_mutex);
             if (e_thread->currentFloor != e_thread->destination)
 			{
-				if(thisBuilding.floors[e_thread->currentFloor - 1].numWaitingStud > 0 && e_thread->load < 750)
+				if(thisBuilding.floors[e_thread->currentFloor - 1].numWaitingStud > 0 && e_thread->load < 750 && started == true)
 				{
 					e_thread->state = LOADING;
 				}
@@ -247,6 +250,7 @@ void process_elevator_state(struct elevator * e_thread) {
             mutex_lock(&elevator_mutex);
             if (started){
                 e_thread->state = IDLE;
+                
             }
             mutex_unlock(&start_mutex);
             mutex_unlock(&elevator_mutex);
@@ -254,8 +258,13 @@ void process_elevator_state(struct elevator * e_thread) {
         case IDLE:
 			ssleep(.3);
             mutex_lock(&elevator_mutex);
-			mutex_lock(&building_mutex);
 			
+            if(!started){
+                e_thread->state = OFFLINE;
+                mutex_unlock(&elevator_mutex);
+                break;
+            }
+            mutex_lock(&building_mutex);
 			// Check for passengers on the current floor
 			bool foundPassenger = false;
 			if (thisBuilding.floors[e_thread->currentFloor].numWaitingStud > 0) {
@@ -292,20 +301,16 @@ int elevator_active(void * _elevator) {
     struct elevator * e_thread = (struct elevator *) _elevator;
     printk(KERN_INFO "elevator thread has started running \n");
     int full = 0;
-	bool stopnow = false;
-    while(!stopnow || full > 0) {
+    while(!kthread_should_stop() || full > 0) {
         process_elevator_state(e_thread);
         mutex_lock(&elevator_mutex);
         full = e_thread->numPassengers;
         mutex_unlock(&elevator_mutex);
-		
-		if(kthread_should_stop())
-		{
-			stopnow = true;
-		}
     }
+    mutex_lock(&start_mutex);
+    started = false;
+    mutex_unlock(&start_mutex);
     mutex_lock(&elevator_mutex);
-	started = false;
     e_thread->state = OFFLINE;
     mutex_unlock(&elevator_mutex);
     
