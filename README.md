@@ -48,7 +48,6 @@ List of Files:
 | |   └──elevator.c
 │ |── Makefile
 | └── syscalls.c
-├── Makefile
 ├── README.md
 ```
 
