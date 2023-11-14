@@ -59,17 +59,28 @@ List of Files:
 
 ### Compilation
 ```bash
-make all
+make
 ```
-This will build both executables with the makefile and shoves the appropriate
-contents into the other folders in this directory. You must create the bin,
-obj, and obj2 folders in the same directory.
+This will build the modules you need to run the part 2 and part 3 program. However, you need
+to execute this command in both directories because they have different makefiles.
 ### Execution
 ```bash
-make run
-./bin/shell
+sudo insmod your_module.ko
+execute your command here
+sudo rmmod your_module.ko
 ```
-This will run the shell program and start off with a slightly different prompt than
-before. However, this will not create the mytimeout executable. Use make all and then
-bin/shell to get back into the shell executable.
+For part 2, run this for a basic demonstration:
+```
+cat /proc/elevator
+```
+For part 3, run this for the full elevator:
+```
+watch -n 1 cat /proc/elevator
+```
+ - Then, pull up a new terminal, go to the producer-consumer executables, and execute these commands:
+```
+./producer urNumOfStudents
+./consumer --start
+./consumer --stop
+```
   
