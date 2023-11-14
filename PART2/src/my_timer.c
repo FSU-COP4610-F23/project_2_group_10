@@ -25,7 +25,8 @@ static ssize_t timer_read(struct file *file, char __user *ubuf, size_t count, lo
 
     ktime_get_real_ts64(&ts_now);
     
-    len = snprintf(buf, sizeof(buf), "current time: %lld.%lld\n", (long long)ts_now.tv_sec, (long long)ts_now.tv_nsec);
+    len = snprintf(buf, sizeof(buf), "current time: %lld.%lld\n", (long long)ts_now.tv_sec,
+        (long long)ts_now.tv_nsec);
 
     if(prev.tv_sec != 0 || prev.tv_nsec != 0){
         long long diff_s = ts_now.tv_sec - prev.tv_sec - 1;
@@ -37,7 +38,8 @@ static ssize_t timer_read(struct file *file, char __user *ubuf, size_t count, lo
         else{
             diff_s += 1;
         }
-        if(!firstRun){len += snprintf(buf+len, sizeof(buf), "elapsed time: %lld.%lld\n", diff_s, diff_ns);}
+        if(!firstRun){len += snprintf(buf+len, sizeof(buf), "elapsed time: %lld.%lld\n",
+            diff_s, diff_ns);}
         else{firstRun--;}
     }
     prev.tv_sec = ts_now.tv_sec;
